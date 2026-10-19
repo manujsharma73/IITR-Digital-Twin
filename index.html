@@ -1,0 +1,192 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>IIT Roorkee Digital Twin</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link href="https://cdn.jsdelivr.net/npm/cesium@1.146.0/Build/Cesium/Widgets/widgets.css" rel="stylesheet">
+  <link href="css/style.css" rel="stylesheet">
+  <script src="https://cdn.jsdelivr.net/npm/cesium@1.146.0/Build/Cesium/Cesium.js"></script>
+</head>
+<body>
+  <div id="cesiumContainer"></div>
+
+  <!-- Splash / loader -->
+  <div id="loader">
+    <div class="loader-inner">
+      <div class="orbit-ring"><span></span><span></span><span></span></div>
+      <h1>IIT Roorkee <em>Digital Twin</em></h1>
+      <p id="loaderMsg">Initialising 3D engine…</p>
+    </div>
+  </div>
+
+  <!-- Brand -->
+  <header id="brand" class="glass ui">
+    <svg class="brand-mark" viewBox="0 0 40 40" aria-hidden="true">
+      <defs><linearGradient id="bg1" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#5ec8ff"/><stop offset="1" stop-color="#8b5cff"/></linearGradient></defs>
+      <path d="M20 3 36 12v16L20 37 4 28V12z" fill="none" stroke="url(#bg1)" stroke-width="2.4"/>
+      <path d="M20 10 29 15v10l-9 5-9-5V15z" fill="url(#bg1)" opacity=".85"/>
+    </svg>
+    <div>
+      <h1>IIT Roorkee <span>Digital Twin</span></h1>
+      <p>TSim Lab · Department of Civil Engineering</p>
+    </div>
+  </header>
+
+  <!-- Left panel -->
+  <aside id="leftPanel" class="glass panel ui">
+    <section>
+      <h2>Camera</h2>
+      <div class="btn-grid">
+        <button id="btnIntro" title="Cinematic fly-in from orbit">Fly-in</button>
+        <button id="btnOrbit" class="toggle" title="Slowly orbit the campus">Orbit</button>
+        <button id="btnTour" class="toggle" title="Fly between key buildings">Guided tour</button>
+        <button id="btnTop" title="Plan view">Top-down</button>
+      </div>
+    </section>
+    <section class="grow">
+      <h2>Landmarks <span id="lmCount" class="chip"></span></h2>
+      <input id="lmFilter" type="search" placeholder="Search buildings…" autocomplete="off">
+      <ul id="lmList"></ul>
+      <p class="note">Building locations © OpenStreetMap contributors</p>
+    </section>
+  </aside>
+
+  <!-- Right panel -->
+  <aside id="rightPanel" class="glass panel ui">
+    <section>
+      <h2>Time of day <span class="chip" id="sunLabel">–</span></h2>
+      <div class="time-row"><span id="timeLabel" class="mono big">--:--</span><span class="muted">IST · <span id="dateLabel"></span></span></div>
+      <input type="range" id="timeSlider" min="0" max="1439" step="1" aria-label="Time of day">
+      <div class="ticks"><span>00</span><span>06</span><span>12</span><span>18</span><span>24</span></div>
+      <div class="btn-row">
+        <button id="btnNow">Now</button>
+        <button id="btnGolden">Golden hour</button>
+        <button id="btnLapse" class="toggle">Time-lapse</button>
+      </div>
+    </section>
+
+    <section>
+      <h2>Visual mode</h2>
+      <div class="seg" id="modeSeg">
+        <button data-mode="0" class="on">Photo</button>
+        <button data-mode="1">Height</button>
+        <button data-mode="2">Blueprint</button>
+      </div>
+      <div id="heightLegend" class="hidden">
+        <div class="ramp"></div>
+        <div class="ramp-labels"><span>0 m</span><span id="rampMid">20 m</span><span id="rampMax">40 m</span></div>
+        <label class="range-row"><span>Max</span><input type="range" id="maxHSlider" min="10" max="80" step="5" value="40"><output id="maxHOut">40 m</output></label>
+        <p class="note">Height above median campus road level, from the photogrammetry mesh. Contours every 5 m.</p>
+      </div>
+      <label class="switch"><input type="checkbox" id="chkCinematic" checked><i></i><span>Cinematic grade</span></label>
+      <label class="switch"><input type="checkbox" id="chkClouds" checked><i></i><span>Volumetric clouds</span></label>
+      <label class="range-row"><span>Detail</span><input type="range" id="qualitySlider" min="2" max="32" step="1" value="12"><output id="qualityOut">High</output></label>
+    </section>
+
+    <section>
+      <h2>Layers</h2>
+      <label class="switch"><input type="checkbox" id="chkLandmarks" checked><i></i><span>Landmarks &amp; beacons</span></label>
+      <label class="switch"><input type="checkbox" id="chkBoundary" checked><i></i><span>Campus geofence</span></label>
+      <label class="switch"><input type="checkbox" id="chkRoads" checked><i></i><span>Road network</span></label>
+      <label class="switch"><input type="checkbox" id="chkAgents" checked><i></i><span>Mobility agents</span></label>
+      <label class="range-row"><span>Agents</span><input type="range" id="agentSlider" min="0" max="800" step="10" value="300"><output id="agentOut">300</output></label>
+      <label class="range-row"><span>Speed</span><input type="range" id="speedSlider" min="1" max="20" step="1" value="4"><output id="speedOut">4×</output></label>
+      <div class="legend" id="agentLegend"></div>
+      <p class="note warn">Agents are illustrative only. They take random walks on OSM road geometry and are not simulation output.</p>
+    </section>
+
+    <section id="trafficSection">
+      <h2>Live traffic <span class="chip" id="trafficStamp">off</span></h2>
+      <label class="switch"><input type="checkbox" id="chkTraffic"><i></i><span>Google traffic overlay</span></label>
+      <label class="range-row"><span>Opacity</span><input type="range" id="trafficAlpha" min="20" max="100" step="5" value="90"><output id="trafficAlphaOut">90%</output></label>
+      <div class="legend traffic-legend">
+        <span style="--c:#1ea362">Free flow</span><span style="--c:#ffa400">Slow</span><span style="--c:#e6301f">Congested</span><span style="--c:#811f1f">Severe</span>
+      </div>
+      <div class="btn-row">
+        <button id="btnTrafficRefresh" title="Fetch fresh traffic tiles">Refresh</button>
+        <button id="btnCityView" title="Zoom out to see Roorkee city roads">City view</button>
+      </div>
+      <p class="note">Real-time Google Maps traffic tiles, draped on the 3D mesh and refreshed every 5 min. Campus internal roads usually have no traffic data.</p>
+    </section>
+
+    <section>
+      <h2>Tools</h2>
+      <div class="btn-grid">
+        <button id="btnMeasure" class="toggle" title="Click two points to measure distance and height difference">Measure</button>
+        <button id="btnShot" title="Save a PNG (P)">Screenshot</button>
+        <button id="btnPhoto" title="Hide the interface (H)">Photo mode</button>
+        <button id="btnKeys" title="Change API keys">API keys</button>
+      </div>
+    </section>
+  </aside>
+
+  <!-- Mobile panel toggles -->
+  <div id="mobileBar" class="ui">
+    <button data-panel="leftPanel">Explore</button>
+    <button data-panel="rightPanel">Controls</button>
+  </div>
+
+  <!-- Compass -->
+  <button id="compass" class="ui glass" title="Face north">
+    <svg viewBox="0 0 64 64" id="compassRose" aria-hidden="true">
+      <circle cx="32" cy="32" r="29" fill="none" stroke="rgba(255,255,255,.25)" stroke-width="1.5"/>
+      <path d="M32 7 38 32H26z" fill="#ff5d6c"/>
+      <path d="M32 57 26 32h12z" fill="rgba(255,255,255,.75)"/>
+      <text x="32" y="20" text-anchor="middle" font-size="9" font-weight="700" fill="#fff">N</text>
+    </svg>
+  </button>
+
+  <!-- HUD -->
+  <div id="hud" class="glass ui mono">
+    <div><b>LAT</b><span id="hudLat">–</span></div>
+    <div><b>LON</b><span id="hudLon">–</span></div>
+    <div><b>Z</b><span id="hudH">–</span></div>
+    <div><b>CAM</b><span id="hudCam">–</span></div>
+    <div><b>TILES</b><span id="hudTiles">–</span></div>
+  </div>
+
+  <!-- Selected landmark -->
+  <div id="infoCard" class="glass ui hidden">
+    <button class="close" id="infoClose" aria-label="Close">×</button>
+    <span class="chip" id="infoCat"></span>
+    <h3 id="infoName"></h3>
+    <dl id="infoDl"></dl>
+    <div class="btn-row">
+      <button id="infoOrbit" class="primary">Orbit</button>
+      <button id="infoLow">Low angle</button>
+    </div>
+  </div>
+
+  <div id="hint" class="ui">Drag to rotate · <kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> fly · <kbd>Q</kbd><kbd>E</kbd> up/down · <kbd>←</kbd><kbd>→</kbd> turn · <kbd>Shift</kbd> fast · <kbd>H</kbd> hide UI · <kbd>Esc</kbd> stop</div>
+  <div id="status" class="glass ui hidden"><span class="spinner"></span><span id="statusMsg"></span></div>
+  <div id="toast"></div>
+
+  <!-- API key dialog -->
+  <div id="keyModal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="keyTitle">
+    <div class="modal-card glass">
+      <h2 id="keyTitle">Connect Google Photorealistic 3D Tiles</h2>
+      <p>The tiles need <b>one</b> of these:</p>
+      <ul>
+        <li>A <b>Google Maps Platform API key</b> with the Map Tiles API enabled.</li>
+        <li>A <b>Cesium ion access token</b>. ion streams the Google tiles and adds Google place search.</li>
+      </ul>
+      <label>Google Maps API key<input id="inGoogle" type="password" autocomplete="off" spellcheck="false"></label>
+      <label>Cesium ion access token<input id="inIon" type="password" autocomplete="off" spellcheck="false"></label>
+      <p class="note">Keys are stored only in this browser on this computer. You can also put them in <code>js/config.js</code>.</p>
+      <div class="btn-row">
+        <button id="btnKeySave" class="primary">Save &amp; launch</button>
+        <button id="btnKeySkip">OpenStreetMap only</button>
+        <button id="btnKeyForget">Forget saved keys</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="js/config.js"></script>
+  <script src="js/landmarks.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>
